@@ -83,10 +83,10 @@ class DueDatesCalendarWidget extends React.Component {
     i18n('Due Dates Calendar Widget');
 
   static getWidgetTitle =
-      (search, context, title, issuesCount, youTrack, scheduleField) => {
+      (search, context, title, issuesCount, youTrack, startScheduleField, scheduleField) => {
         let displayedTitle =
             title ||
-            `${DueDatesCalendarWidget.getFullSearchPresentation(context, search)} has: {${scheduleField}}`;
+            `${DueDatesCalendarWidget.getFullSearchPresentation(context, search)} has: {${scheduleField}} or {${startScheduleField}}`;
         if (issuesCount) {
           const superScriptIssuesCount =
                 `${issuesCount}`.split('').map(DueDatesCalendarWidget.digitToUnicodeSuperScriptDigit).join('');
@@ -95,7 +95,7 @@ class DueDatesCalendarWidget extends React.Component {
         return {
           text: displayedTitle,
           href: youTrack && DueDatesCalendarWidget.getIssueListLink(
-            youTrack.homeUrl, context, `${search} has: {${scheduleField}}`
+            youTrack.homeUrl, context, `${search} has: {${scheduleField}} or {${startScheduleField}}`
           )
         };
       };
@@ -182,6 +182,9 @@ class DueDatesCalendarWidget extends React.Component {
     const scheduleField =
         this.props.configWrapper.getFieldValue('scheduleField') ||
         DEFAULT_SCHEDULE_FIELD;
+    const startScheduleField =
+      this.props.configWrapper.getFieldValue('startScheduleField') ||
+      DEFAULT_SCHEDULE_FIELD;
     const colorField =
         this.props.configWrapper.getFieldValue('colorField') ||
         DEFAULT_COLOR_FIELD;
@@ -196,6 +199,7 @@ class DueDatesCalendarWidget extends React.Component {
       context,
       date: date ? new Date(date) : new Date(),
       view,
+      startScheduleField,
       scheduleField,
       isDateAndTime,
       colorField,
@@ -263,7 +267,7 @@ class DueDatesCalendarWidget extends React.Component {
   submitConfiguration = async formParameters => {
     const {
       search, title, context, refreshPeriod, selectedYouTrack,
-      scheduleField, colorField, isDateAndTime
+      startScheduleField, scheduleField, colorField, isDateAndTime
     } = formParameters;
 
     this.setYouTrack(
@@ -279,6 +283,7 @@ class DueDatesCalendarWidget extends React.Component {
               context,
               title,
               refreshPeriod,
+              startScheduleField,
               scheduleField,
               colorField,
               isDateAndTime,
@@ -318,10 +323,12 @@ class DueDatesCalendarWidget extends React.Component {
         refreshPeriod,
         search,
         context,
+        startScheduleField,
         scheduleField
       } = this.state;
       if (!isConfiguring && refreshPeriod === newRefreshPeriod) {
-        await this.loadIssues(search, context, scheduleField);
+        await this.loadIssues(search, context, startScheduleField,
+          scheduleField);
         this.initRefreshPeriod(refreshPeriod);
       }
     }, newRefreshPeriod * millisInSec);
@@ -340,6 +347,7 @@ class DueDatesCalendarWidget extends React.Component {
         context={this.state.context}
         title={this.state.title}
         refreshPeriod={this.state.refreshPeriod}
+        startScheduleField={this.state.startScheduleField || DEFAULT_SCHEDULE_FIELD}
         scheduleField={this.state.scheduleField || DEFAULT_SCHEDULE_FIELD}
         colorField={this.state.colorField || DEFAULT_COLOR_FIELD}
         onSubmit={this.submitConfiguration}
@@ -368,20 +376,20 @@ class DueDatesCalendarWidget extends React.Component {
     );
   }
 
-  async loadIssues(search, context, scheduleField) {
+  async loadIssues(search, context, startScheduleField, scheduleField) {
     const currentSearch = search || this.state.search;
     const currentContext = context || this.state.context;
+    const currentStartScheduleField = startScheduleField ||
+      this.state.startScheduleField;
     const currentScheduleField = scheduleField || this.state.scheduleField;
     try {
-      await this.loadIssuesCount(`${currentSearch} has: {${currentScheduleField}}`, currentContext);
+      await this.loadIssuesCount(`${currentSearch} has: {${currentScheduleField}} or {${startScheduleField}}`, currentContext);
     } catch (error) {
       this.setState({isEmptyQueryResultError: true, issuesCount: 0});
     }
 
-    await this.loadIssuesUnsafe(
-      currentSearch,
-      currentContext,
-      currentScheduleField);
+    await this.loadIssuesUnsafe(currentSearch, currentContext,
+      currentStartScheduleField, currentScheduleField);
 
     await this.setFirstDayOfWeek();
 
@@ -392,10 +400,11 @@ class DueDatesCalendarWidget extends React.Component {
   }
 
 
-  async loadIssuesUnsafe(search, context, scheduleField) {
+  async loadIssuesUnsafe(search, context, startScheduleField, scheduleField) {
 
     const currentDate = moment(this.state.date);
-    const issuesQuery = `${search} ${scheduleField}: ${moment(currentDate).format('YYYY-MM')}`;
+    const dateString = moment(currentDate).format('YYYY-MM')
+    const issuesQuery = `${search} ${scheduleField}: ${dateString} or ${startScheduleField}: ${dateString}`;
     const issues = await loadIssues(
       this.fetchYouTrack, issuesQuery, context
     );
@@ -403,6 +412,7 @@ class DueDatesCalendarWidget extends React.Component {
     const events = [];
     if (Array.isArray(issues)) {
       issues.forEach(issue => {
+        let startDate = '';
         let dueDate = '';
         let foregroundColor = '#9c9c9c';
         let backgroundColor = '#e8e8e8';
@@ -414,7 +424,12 @@ class DueDatesCalendarWidget extends React.Component {
           if (field.hasOwnProperty('projectCustomField') && field.value) {
             if (field.value) {
             // eslint-disable-next-line max-len
-              if (field.projectCustomField.field.name === this.state.scheduleField) {
+              if (field.projectCustomField.field.name ===
+                this.state.startScheduleField) {
+                startDate = field.value;
+              }
+              if (field.projectCustomField.field.name ===
+                this.state.scheduleField) {
                 dueDate = field.value;
               }
               // eslint-disable-next-line max-len
@@ -448,7 +463,7 @@ class DueDatesCalendarWidget extends React.Component {
           url: `${this.state.youTrack.homeUrl}/issue/${issue.idReadable}`,
           priority: issuePriority,
           isResolved,
-          start: (new Date(dueDate)),
+          start: (new Date(startDate || dueDate)),
           end: (new Date(dueDate)),
           allDay: !this.state.isDateAndTime,
           foregroundColor,
@@ -550,13 +565,14 @@ class DueDatesCalendarWidget extends React.Component {
       title,
       issuesCount,
       youTrack,
+      startScheduleField,
       scheduleField
     } = this.state;
 
     const widgetTitle = isConfiguring
       ? DueDatesCalendarWidget.getDefaultWidgetTitle()
       : DueDatesCalendarWidget.getWidgetTitle(
-        search, context, title, issuesCount, youTrack, scheduleField
+        search, context, title, issuesCount, youTrack, startScheduleField, scheduleField
       );
 
     return (

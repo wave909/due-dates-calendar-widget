@@ -29,6 +29,7 @@ class EditForm extends React.Component {
     search: PropTypes.string,
     context: PropTypes.object,
     title: PropTypes.string,
+    startScheduleField: PropTypes.string,
     scheduleField: PropTypes.string,
     colorField: PropTypes.string,
     refreshPeriod: PropTypes.number,
@@ -61,6 +62,7 @@ class EditForm extends React.Component {
       search: props.search || '',
       context: props.context,
       title: props.title || '',
+      startScheduleField: props.startScheduleField,
       scheduleField: props.scheduleField,
       colorField: props.colorField,
       refreshPeriod: props.refreshPeriod || 0,
@@ -142,6 +144,10 @@ class EditForm extends React.Component {
     this.setState({scheduleField: evt.label});
   };
 
+  changeStartScheduleField = evt => {
+    this.setState({startScheduleField: evt.label});
+  };
+
   changeColorField = evt => {
     this.setState({colorField: evt.label});
   };
@@ -164,6 +170,7 @@ class EditForm extends React.Component {
       title,
       refreshPeriod,
       selectedYouTrack,
+      startScheduleField,
       scheduleField,
       colorField
     } = this.state;
@@ -190,6 +197,7 @@ class EditForm extends React.Component {
       context,
       refreshPeriod,
       selectedYouTrack,
+      startScheduleField,
       scheduleField,
       colorField,
       isDateAndTime
@@ -460,6 +468,21 @@ class EditForm extends React.Component {
             onSelect={this.changeYouTrack}
             filter={true}
             label={i18n('Select YouTrack')}
+          />
+        }
+        {
+          !errorMessage &&
+          <Select
+            className="ring-form__group"
+            selectedLabel="Start Schedule by field"
+            size={InputSize.FULL}
+            data={this.state.availableScheduleFields}
+            selected={{label: this.state.startScheduleField}}
+            onSelect={this.changeStartScheduleField}
+            filter={true}
+            maxHeight={300}
+            renderOptimization={false}
+            label={i18n('Select Start Schedule field (optional)')}
           />
         }
         {
